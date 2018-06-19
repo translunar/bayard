@@ -30,6 +30,7 @@ class Accelerometer(object):
                  accel_random_walk           = (181.0/3.0 * 9.81e-6)**2 / (365*24*3600.0),
                  accel_bias                  = None,
                  velocity_bias               = 0.0, # not sure why this would ever be nonzero
+                 velocity_variance           = None,
                  initial_covariance          = None):
 
         if position_random_walk is None:
@@ -73,6 +74,8 @@ class Accelerometer(object):
 
         if accel_bias is not None:
             self.c[2,2] = accel_bias
+        if velocity_variance is not None:
+            self.c[1,1] = velocity_variance
 
     def bayard(self, t):
         k1 = 0.05 # 6/5!
@@ -88,32 +91,39 @@ class Accelerometer(object):
 
 
 if __name__ == '__main__':
+    velocity_variance = 0.011**2
     honeywell_mimu_qa2000 = Accelerometer(sampling_frequency    = 200.0, # Hz
+                                          velocity_variance     = velocity_variance,
                                           velocity_read_noise   = 0.003/3.0, # m/s
                                           velocity_random_walk  = 0.0,
                                           accel_random_walk     = (181.0/3.0 * 9.81e-6)**2 / (365*24*3600.0), # ug over 12 months
                                           accel_bias            = 0.0027 / 60.0) # m/s/count to m/s2 (velocity quantization)
     lsm6dsl1              = Accelerometer(sampling_frequency    = 1666.0,
+                                          velocity_variance     = velocity_variance,    
                                           position_random_walk  = 0.0,
                                           accel_random_walk     = (80 * 9.81e-6)**2, # ug/sqrt(Hz) to m2/s5
                                           accel_meas_variance   = 1800.0 * 9.81e-6, # ug(RMS) to m/s2
                                           accel_bias            = 40.0 * 9.81e-3)
     lsm6dsl2              = Accelerometer(sampling_frequency    = 1666.0,
+                                          velocity_variance     = velocity_variance,
                                           position_random_walk  = 0.0,
                                           accel_random_walk     = (80 * 9.81e-6)**2, # ug/sqrt(Hz) to m2/s5
                                           accel_meas_variance   = 2000.0 * 9.81e-6, # ug(RMS) to m/s2
                                           accel_bias            = 40.0 * 9.81e-3)
     lsm6dsl3              = Accelerometer(sampling_frequency    = 1666.0,
+                                          velocity_variance     = velocity_variance,
                                           position_random_walk  = 0.0,
                                           accel_random_walk     = (90 * 9.81e-6)**2, # ug/sqrt(Hz) to m2/s5
                                           accel_meas_variance   = 2400.0 * 9.81e-6, # ug(RMS) to m/s2
                                           accel_bias            = 40.0 * 9.81e-3)
     lsm6dsl4              = Accelerometer(sampling_frequency    = 1666.0,
+                                          velocity_variance     = velocity_variance,
                                           position_random_walk  = 0.0,
                                           accel_random_walk     = (130 * 9.81e-6)**2, # ug/sqrt(Hz) to m2/s5
                                           accel_meas_variance   = 3000.0 * 9.81e-6, # ug(RMS) to m/s2
                                           accel_bias            = 40.0 * 9.81e-3)
     vib                   = Accelerometer(sampling_frequency    = 1300.0,
+                                          velocity_variance     = velocity_variance,
                                           accel_random_walk     = (2.7 * 9.8e-3)**2, # mg/sqrt(Hz) to m2/s5
                                           accel_meas_variance   = 41.0, # m/s2
                                           accel_bias            = 1.5 * 9.81e-3,
