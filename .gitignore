@@ -1,0 +1,8 @@
+*.pyc
+*.so
+*.dylib
+*~
+*.egg-info
+.DS_Store
+build/
+dist/
