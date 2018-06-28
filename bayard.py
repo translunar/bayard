@@ -73,7 +73,7 @@ class Accelerometer(object):
             self.c  = initial_covariance
 
         if accel_bias is not None:
-            self.c[2,2] = accel_bias
+            self.c[2,2] = accel_bias**2
         if velocity_variance is not None:
             self.c[1,1] = velocity_variance
         if position_variance is not None:
@@ -85,24 +85,24 @@ class Accelerometer(object):
         k1 = 0.05 # 6/5!
         k2 = 0.25 # 6/4!
         
-        c00 = k1*self.q2 * t**5 + k2*self.c[2,2] * t**4 + (self.c[1,2] + self.q1/6.0)*t**3 + (self.c[0,2] + self.c[1,1]) * t**2 + (self.c[0,1] + self.q0) * t + self.c[0,0]
+        c00 = k1*self.q2 * t**5 + k2*self.c[2,2] * t**4 + (self.c[1,2] + self.q1/3.0)*t**3 + (self.c[0,2] + self.c[1,1]) * t**2 + (self.c[0,1] + self.q0) * t + self.c[0,0]
 
         k3 = 0.5
         #c11 = k2*self.q2 * t**4 + self.c[2,2] * t**3 + (3.0 * self.c[1,2] + self.q1) * t**2 + (self.c[0,2] + self.c[1,1]) * t + 2.0 * self.c[0,1] + self.q0
-        c11 = self.q2/3.0 * t**3 + self.c[2,2] * t**2 + (self.c[1,2] + self.c[0,1] + self.q1) * t + self.c[1,1] #  + self.b**2
+        c11 = self.q2/3.0 * t**3 + self.c[2,2] * t**2 + (2.0*self.c[1,2] + self.q1) * t + self.c[1,1] #  + self.b**2
 
         return c00, c11
 
 
 if __name__ == '__main__':
-    velocity_variance = 0.011**2
+    velocity_variance = 0.011**2 #3.6e-10 (matches 3D analysis)
     honeywell_mimu_qa2000 = Accelerometer(sampling_frequency    = 200.0, # Hz
                                           velocity_variance     = velocity_variance,
                                           velocity_read_noise   = 0.003/3.0, # m/s
                                           velocity_random_walk  = 0.0,
                                           accel_random_walk     = (181.0/3.0 * 9.81e-6)**2 / (365*24*3600.0), # ug over 12 months
                                           accel_bias            = 0.0027 / 60.0) # m/s/count to m/s2 (velocity quantization)
-    position_variance = honeywell_mimu_qa2000.c[0,0]
+    position_variance = honeywell_mimu_qa2000.c[0,0] # 0.00036 (matches 3D analysis)
 
     acc = {}
     acc['honeywell']      = honeywell_mimu_qa2000
@@ -149,7 +149,7 @@ if __name__ == '__main__':
                                           accel_bias            = 900 * 9.81e-3,
                                           position_random_walk  = 0.0)
 
-    time = np.arange(0, 60, 0.001)
+    time = np.arange(0, 100.0, 0.001)
 
     pos_cov = {}
     vel_cov = {}
@@ -173,7 +173,7 @@ if __name__ == '__main__':
 
     pdf = PdfPages('bayard.pdf')
     fig = plt.figure(figsize=(6,8))
-    fig.suptitle("INS position and velocity variance growth")
+    #fig.suptitle("INS position and velocity variance growth")
     ax1 = fig.add_subplot(211)
     #ax1.set_title("INS position error growth")
     ax1.plot(time, np.sqrt(pos_cov['honeywell']), label="Honeywell")
@@ -184,11 +184,11 @@ if __name__ == '__main__':
     ax1.plot(time, np.sqrt(pos_cov['vibz']),  label="Vibrometer z")
     ax1.plot(time, np.sqrt(pos_cov['vibtemp']), label="Vibrometer z + 30K")
     #ax1.set_xlabel("Time (seconds)")
-    ax1.set_ylabel("m")
+    ax1.set_ylabel("m2")
     ax1.set_yscale("log")
     ax1.set_xscale("log", nonposx='clip')
-    ax1.legend()
     ax1.grid(True)
+    plt.setp(ax1.get_xticklabels(), visible=False)
 
     ax2 = fig.add_subplot(212, sharex=ax1)
     #ax2.set_title("INS velocity error growth")
@@ -200,14 +200,15 @@ if __name__ == '__main__':
     ax2.plot(time, np.sqrt(vel_cov['vibz']),  label="Vibrometer z")
     ax2.plot(time, np.sqrt(vel_cov['vibtemp']), label="Vibrometer z + 30K")
     ax2.set_xlabel("Time (seconds)")
-    ax2.set_ylabel("m/s")
+    ax2.set_ylabel("m2/s2")
     ax2.set_yscale("log")
     ax2.set_xscale("log", nonposx='clip')
     ax2.set_xlim((1e-3, 1e2))
     ax2.grid(True)
+    ax2.legend()
     
     #plt.show()
-    
+    fig.subplots_adjust(hspace=0)
     pdf.savefig(fig)
     pdf.close()
     plt.show()
