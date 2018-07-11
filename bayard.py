@@ -42,7 +42,7 @@ def ylabels(variance = True, convert = True):
 
 
 def plot_errors(time, pos_cov, vel_cov,
-                which=('honeywell', 'lsm6dsl1', 'lsm6dsl3', 'lsm6dsl4', 'vibxy', 'vibz', 'vibtemp'),
+                which=('lsm6dsl1', 'lsm6dsl3', 'lsm6dsl4', 'vibxy', 'vibz', 'vibtemp'),
                 labels = {'honeywell': "Honeywell",
                           'lsm6dsl1' : "Mode 1-2",
                           'lsm6dsl3' : "Mode 3",
@@ -90,8 +90,8 @@ def plot_errors(time, pos_cov, vel_cov,
         ax1.plot(time, y1, label=labels[key], color=colors[key])
         ax2.plot(time, y2, label=labels[key], color=colors[key])
 
-    if xscale: ax1.set_xscale(xscale)
-    if yscale:
+    if xscale is not None: ax1.set_xscale(xscale)
+    if yscale is not None:
         ax1.set_yscale(yscale)
         ax2.set_yscale(yscale)
 
@@ -302,7 +302,7 @@ if __name__ == '__main__':
                                   
                                 
     
-    time = np.arange(0, 100.0, 0.001)#100.0, 0.001)
+    time = np.arange(0, 2.0, 0.001)#100.0, 0.001)
 
     att_cov = {}
     pos_cov = {}
@@ -335,11 +335,11 @@ if __name__ == '__main__':
             ii += 1
 
     fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_variance.pdf', variance = True, xscale = 'log', yscale = 'log', convert=True, xlim=(0.001, 100.0))
-    fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma.pdf', variance = False, xscale = 'log', yscale = 'log', convert=True, xlim=(0.001, 100.0))
-    fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_variance_1s.pdf', variance = True, xlim=(0.0, 1.0), xscale = 'log', yscale = 'log', vel_ylim=(0.001, 1000.0), pos_ylim=(5e-4, 500.0), convert=True)
-    fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma.pdf', variance = False, xscale = 'log', yscale = 'log', convert=True)
-    fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_1s.pdf', variance = False, xlim=(0.0, 1.0), xscale = 'log', yscale = 'log', vel_ylim=(0.03, 50.0), pos_ylim=(0.02, 25.0), convert=True)
-    fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_5s.pdf', variance = False, xlim=(0.0, 2.0), which=('lsm6dsl4',), labels={'lsm6dsl4': "LSM6DSL"}, pos_ylim=(0.0, 3.0), vel_ylim=(0.0, 3.0), convert=True)
+    fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_1s_no_vibtemp.pdf', variance = False, convert=True, which=('lsm6dsl1', 'lsm6dsl3', 'lsm6dsl4', 'vibxy', 'vibz'))
+    fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_1s.pdf', variance = False, yscale = 'log', convert=True)
+    #fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma.pdf', variance = False, xscale = 'log', yscale = 'log', convert=True)
+    #fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_1s.pdf', variance = False, xlim=(0.0, 1.0), xscale = 'log', yscale = 'log', vel_ylim=(0.03, 50.0), pos_ylim=(0.02, 25.0), convert=True)
+    #fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_5s.pdf', variance = False, xlim=(0.0, 2.0), which=('lsm6dsl4',), labels={'lsm6dsl4': "LSM6DSL"}, pos_ylim=(0.0, 3.0), vel_ylim=(0.0, 3.0), convert=True)
     
     plt.show()
 
