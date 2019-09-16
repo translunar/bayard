@@ -30,6 +30,12 @@ def convert_errors(values, variance = True, convert = True):
         if convert: return np.sqrt(values) * FEET_PER_METER
         else:       return np.sqrt(values)
 
+def convert_att_errors(values, variance = True):
+    if variance:
+        return (np.sqrt(values) * 180.0 / np.pi)**2
+    else:
+        return np.sqrt(values) * 180/np.pi
+
 
 def ylabels(variance = True, convert = True):
     if variance:
@@ -40,6 +46,40 @@ def ylabels(variance = True, convert = True):
         else:       return ("m",   "m/s")
     
 
+
+def plot_att_errors(time, att_cov,
+                         which=('honeywell', 'lsm6dsl', 'mg364pdca'),
+                         labels = {'honeywell': "Honeywell",
+                                   'lsm6dsl': "MEMS example",
+                                   'mg364pdca': "M-G364PDCA"},
+                         variance = True,
+                         xscale   = None,
+                         yscale   = None,
+                         xlim     = None,
+                         ylim     = None): # convert to deg, deg/s
+
+    fig = plt.figure(figsize=(6,6))
+    ax = fig.add_subplot(111)
+    ax.grid(True)
+    ax.set_xlabel("time (s)")
+    ax.set_ylabel("att err (deg) per-axis 1-sigma")
+    if xscale:
+        ax.set_xscale(xscale)
+    if yscale:
+        ax.set_yscale(yscale)
+    if xlim:
+        ax.set_xlim(xlim)
+    if ylim:
+        ax.set_ylim(ylim)
+
+    for key in which:
+        y = convert_att_errors(att_cov[key], variance = variance)
+        ax.plot(time, y, label=labels[key])
+
+    ax.legend()
+
+    return fig, ax
+                                   
 
 def plot_errors(time, pos_cov, vel_cov,
                 which=('lsm6dsl1', 'lsm6dsl3', 'lsm6dsl4', 'vibxy', 'vibz', 'vibtemp'),
@@ -299,10 +339,15 @@ if __name__ == '__main__':
                                   attitude_meas_variance = (333e-6)**2, #r2
                                   attitude_meas_bias     = (333e-6)**2, #r2
                                   attitude_meas_sampling_period = 0.5) # s
+    gyro['mg364pdca'] = Gyroscope(angle_random_walk = ((0.09 * np.pi/180.0)**2) / 3600.0,
+                                  bias_stability    = ((2.2 * np.pi/180.0) / 3600.0)**2 / 3600.0,
+                                  attitude_meas_variance = (333e-6)**2,
+                                  attitude_meas_bias     = (333e-6)**2,
+                                  attitude_meas_sampling_period = 0.5) # s
                                   
                                 
     
-    time = np.arange(0, 2.0, 0.001)#100.0, 0.001)
+    time = np.arange(0, 600.0, 0.001)
 
     att_cov = {}
     pos_cov = {}
@@ -334,12 +379,14 @@ if __name__ == '__main__':
             pos_cov[aa][ii], vel_cov[aa][ii] = ac.bayard(t)
             ii += 1
 
-    fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_variance.pdf', variance = True, xscale = 'log', yscale = 'log', convert=True, xlim=(0.001, 100.0))
-    fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_1s_no_vibtemp.pdf', variance = False, convert=True, which=('lsm6dsl1', 'lsm6dsl3', 'lsm6dsl4', 'vibxy', 'vibz'))
-    fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_1s.pdf', variance = False, yscale = 'log', convert=True)
+    #fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_variance.pdf', variance = True, xscale = 'log', yscale = 'log', convert=True, xlim=(0.001, 100.0))
+    #fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_1s_no_vibtemp.pdf', variance = False, convert=True, which=('lsm6dsl1', 'lsm6dsl3', 'lsm6dsl4', 'vibxy', 'vibz'))
+    #fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_1s.pdf', variance = False, yscale = 'log', convert=True)
     #fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma.pdf', variance = False, xscale = 'log', yscale = 'log', convert=True)
     #fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_1s.pdf', variance = False, xlim=(0.0, 1.0), xscale = 'log', yscale = 'log', vel_ylim=(0.03, 50.0), pos_ylim=(0.02, 25.0), convert=True)
     #fig = plot_errors(time, pos_cov, vel_cov, filename='bayard_accel_sigma_5s.pdf', variance = False, xlim=(0.0, 2.0), which=('lsm6dsl4',), labels={'lsm6dsl4': "LSM6DSL"}, pos_ylim=(0.0, 3.0), vel_ylim=(0.0, 3.0), convert=True)
+
+    fig = plot_att_errors(time, att_cov, variance = False, xscale='log', yscale='log', ylim=(1e-2, 10))
     
     plt.show()
 
