@@ -233,10 +233,12 @@ class TestSteadyStateCovariance(unittest.TestCase):
         g = np.dot(h.T, np.dot(np.linalg.inv(np.array([[r]])), h))
         p = steady_state_covariance(a, g, np.diag([q1, q2]))
 
+        # atol must be 0.0: these run down to 3e-15, so numpy's default
+        # absolute tolerance of 1e-08 would make all three vacuous.
         l = np.sqrt(q1 + 2 * np.sqrt(r * q2))
-        self.assertTrue(np.allclose(p[0, 0], np.sqrt(r) * l,   rtol=1e-9))  # (1.3)
-        self.assertTrue(np.allclose(p[0, 1], np.sqrt(r * q2),  rtol=1e-9))  # (1.4)
-        self.assertTrue(np.allclose(p[1, 1], np.sqrt(q2) * l,  rtol=1e-9))  # (1.5)
+        self.assertTrue(np.allclose(p[0, 0], np.sqrt(r) * l,  rtol=1e-9, atol=0.0))  # (1.3)
+        self.assertTrue(np.allclose(p[0, 1], np.sqrt(r * q2), rtol=1e-9, atol=0.0))  # (1.4)
+        self.assertTrue(np.allclose(p[1, 1], np.sqrt(q2) * l, rtol=1e-9, atol=0.0))  # (1.5)
 
     def test_accel_covariance_satisfies_riccati(self):
         """Every term is one consistent solution, not two stacked ones.
@@ -261,7 +263,7 @@ class TestSteadyStateCovariance(unittest.TestCase):
     def test_accel_covariance_is_symmetric_positive_definite(self):
         c = self.accel().c
         self.assertEqual(c.shape, (3, 3))
-        self.assertTrue(np.allclose(c, c.T))
+        self.assertTrue(np.allclose(c, c.T, atol=0.0))
         self.assertTrue(np.all(np.linalg.eigvalsh(c) > 0))
 
     def test_velocity_variance_is_not_zero(self):
