@@ -1,15 +1,20 @@
-"""Check Gyroscope.bayard() against a direct transcription of the reference
-MATLAB in references/bayard_calc.m.
+"""Check bayard.py against the reference implementations.
 
-The gyro and star tracker values are the `jpl_mimu` and `st_bct` cases from
+Gyroscope.bayard() is checked against a direct transcription of the MATLAB in
+references/bayard_calc.m, using the `jpl_mimu` and `st_bct` values from
 references/bayard_method.m.
+
+Accelerometer.bayard() has no MATLAB to check against -- bayard_calc.m and
+bayard_method.m cover the gyro only -- so it is checked against a direct
+transcription of equation (1.6) of references/bayard2000.pdf.
 """
 
 import unittest
+from math import factorial
 
 import numpy as np
 
-from bayard import Gyroscope
+from bayard import Accelerometer, Gyroscope
 
 
 D2R  = np.pi / 180.0
@@ -103,6 +108,97 @@ class TestGyroscope(unittest.TestCase):
         values = [self.gyro.bayard(t) for t in TIMES]
         for earlier, later in zip(values, values[1:]):
             self.assertLess(earlier, later)
+
+
+def bayard2000_eq_1_6(q0, q1, q2, c, t):
+    """Direct transcription of equation (1.6) of references/bayard2000.pdf.
+
+    The memo indexes the position/rate/accel error vector from 1, so its
+    c11/c12/c13/c22/c23/c33 are c[0,0]/c[0,1]/c[0,2]/c[1,1]/c[1,2]/c[2,2] here.
+    Written with the factorials left in, to stay close to the printed equation.
+    """
+    c11_0, c12_0, c13_0 = c[0, 0], c[0, 1], c[0, 2]
+    c22_0, c23_0, c33_0 = c[1, 1], c[1, 2], c[2, 2]
+
+    return (6 * q2 / factorial(5)) * t**5 \
+        + 6 * (c33_0 / factorial(4)) * t**4 \
+        + ((6 * c23_0 + 2 * q1) / factorial(3)) * t**3 \
+        + 2 * ((c13_0 + c22_0) / factorial(2)) * t**2 \
+        + (2 * c12_0 + q0) * t \
+        + c11_0
+
+
+def velocity_propagation(q1, q2, c, t):
+    """P11(t) for the triple integrator.
+
+    The memo's section 1.2 promises a velocity covariance c22(t) but never
+    gives one, so this is derived rather than transcribed:
+    P(t) = Phi P(0) Phi' + integral of Phi Q Phi', with Phi the triple
+    integrator state transition matrix [[1,t,t2/2],[0,1,t],[0,0,1]].
+    """
+    return c[1, 1] + (2 * c[1, 2] + q1) * t + c[2, 2] * t**2 + q2 * t**3 / 3.0
+
+
+class TestAccelerometer(unittest.TestCase):
+    """Accelerometer must reproduce equation (1.6) of the Bayard memo."""
+
+    RTOL = 1e-12
+
+    # Arbitrary but fully populated: every initial covariance term must be
+    # nonzero, or a dropped term goes unnoticed. In particular c[0,1] must be
+    # nonzero to pin down the factor of 2 on the linear term.
+    Q0 = 3.0e-7   # position random walk, m2/s
+    Q1 = 5.0e-9   # velocity random walk, m2/s3
+    Q2 = 7.0e-13  # accel random walk,    m2/s5
+
+    C0 = np.array([[4.0e-4, 3.0e-5, 2.0e-7],
+                   [3.0e-5, 1.2e-4, 5.0e-7],
+                   [2.0e-7, 5.0e-7, 9.0e-9]])
+
+    def setUp(self):
+        self.accel = Accelerometer(position_random_walk = self.Q0,
+                                   velocity_random_walk = self.Q1,
+                                   accel_random_walk    = self.Q2,
+                                   initial_covariance   = self.C0.copy())
+
+    def assertClose(self, actual, expected, msg = None):
+        """Purely relative; see TestGyroscope.assertClose for why atol is 0.0."""
+        self.assertTrue(np.isclose(actual, expected, rtol = self.RTOL, atol = 0.0),
+                        msg or "got %r, expected %r" % (actual, expected))
+
+    def test_position_matches_memo_eq_1_6(self):
+        for t in TIMES:
+            expected = bayard2000_eq_1_6(self.Q0, self.Q1, self.Q2, self.C0, t)
+            c00, _ = self.accel.bayard(t)
+            self.assertClose(c00, expected,
+                             "t = %g: got %r, expected %r" % (t, c00, expected))
+
+    def test_position_linear_term_carries_factor_of_two(self):
+        """The t coefficient is (2 c12(0) + q0), not (c12(0) + q0)."""
+        # Isolate the linear term: with only c[0,1] and q0 nonzero, and the
+        # higher-order initial terms zeroed, c00(t) - c00(0) is exactly
+        # (2 c12 + q0) t.
+        c = np.zeros((3, 3))
+        c[0, 1] = c[1, 0] = 3.0e-5
+        accel = Accelerometer(position_random_walk = self.Q0,
+                              velocity_random_walk = 0.0,
+                              accel_random_walk    = 0.0,
+                              initial_covariance   = c)
+        t = 10.0
+        c00, _ = accel.bayard(t)
+        self.assertClose(c00 - c[0, 0], (2 * c[0, 1] + self.Q0) * t)
+
+    def test_velocity_matches_derivation(self):
+        for t in TIMES:
+            expected = velocity_propagation(self.Q1, self.Q2, self.C0, t)
+            _, c11 = self.accel.bayard(t)
+            self.assertClose(c11, expected,
+                             "t = %g: got %r, expected %r" % (t, c11, expected))
+
+    def test_bayard_starts_at_initial_covariance(self):
+        c00, c11 = self.accel.bayard(0.0)
+        self.assertClose(c00, self.C0[0, 0])
+        self.assertClose(c11, self.C0[1, 1])
 
 
 if __name__ == '__main__':

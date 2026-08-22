@@ -268,10 +268,8 @@ class Accelerometer(object):
         k1 = 0.05 # 6/5!
         k2 = 0.25 # 6/4!
         
-        c00 = k1*self.q2 * t**5 + k2*self.c[2,2] * t**4 + (self.c[1,2] + self.q1/3.0)*t**3 + (self.c[0,2] + self.c[1,1]) * t**2 + (self.c[0,1] + self.q0) * t + self.c[0,0]
+        c00 = k1*self.q2 * t**5 + k2*self.c[2,2] * t**4 + (self.c[1,2] + self.q1/3.0)*t**3 + (self.c[0,2] + self.c[1,1]) * t**2 + (2.0 * self.c[0,1] + self.q0) * t + self.c[0,0]
 
-        k3 = 0.5
-        #c11 = k2*self.q2 * t**4 + self.c[2,2] * t**3 + (3.0 * self.c[1,2] + self.q1) * t**2 + (self.c[0,2] + self.c[1,1]) * t + 2.0 * self.c[0,1] + self.q0
         c11 = self.q2/3.0 * t**3 + self.c[2,2] * t**2 + (2.0*self.c[1,2] + self.q1) * t + self.c[1,1] #  + self.b**2
 
         return c00, c11
