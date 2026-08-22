@@ -14,7 +14,7 @@ from math import factorial
 
 import numpy as np
 
-from bayard import Accelerometer, Gyroscope
+from bayard import Accelerometer, Gyroscope, steady_state_covariance
 
 
 D2R  = np.pi / 180.0
@@ -199,6 +199,84 @@ class TestAccelerometer(unittest.TestCase):
         c00, c11 = self.accel.bayard(0.0)
         self.assertClose(c00, self.C0[0, 0])
         self.assertClose(c11, self.C0[1, 1])
+
+
+class TestSteadyStateCovariance(unittest.TestCase):
+    """The Riccati solver, and the 3-state accelerometer steady state.
+
+    The memo gives no 3-state steady state, so the anchor is the 2-state gyro
+    case: equations (1.2)-(1.5) are the closed-form solution of exactly this
+    Riccati equation, so the solver must reproduce them.
+    """
+
+    A3 = np.array([[0.0, 1.0, 0.0],
+                   [0.0, 0.0, 1.0],
+                   [0.0, 0.0, 0.0]])
+    H3 = np.array([[1.0, 0.0, 0.0],
+                   [0.0, 1.0, 0.0]])
+
+    def accel(self, **kwargs):
+        args = dict(sampling_frequency    = 200.0,
+                    velocity_read_noise   = 0.003 / 3.0,
+                    velocity_random_walk  = 0.0,
+                    accel_random_walk     = (181.0 / 3.0 * 9.81e-6)**2 / (365 * 24 * 3600.0))
+        args.update(kwargs)
+        return Accelerometer(**args)
+
+    def test_solver_reproduces_memo_two_state_gyro(self):
+        """Eqs (1.2)-(1.5) solve this Riccati equation; the solver must agree."""
+        q1, q2 = JPL_MIMU_RANDOM_WALK**2, JPL_MIMU_BIAS_STABILITY**2 / 3600.0
+        r = ST_R
+
+        a = np.array([[0.0, 1.0], [0.0, 0.0]])
+        h = np.array([[1.0, 0.0]])
+        g = np.dot(h.T, np.dot(np.linalg.inv(np.array([[r]])), h))
+        p = steady_state_covariance(a, g, np.diag([q1, q2]))
+
+        l = np.sqrt(q1 + 2 * np.sqrt(r * q2))
+        self.assertTrue(np.allclose(p[0, 0], np.sqrt(r) * l,   rtol=1e-9))  # (1.3)
+        self.assertTrue(np.allclose(p[0, 1], np.sqrt(r * q2),  rtol=1e-9))  # (1.4)
+        self.assertTrue(np.allclose(p[1, 1], np.sqrt(q2) * l,  rtol=1e-9))  # (1.5)
+
+    def test_accel_covariance_satisfies_riccati(self):
+        """Every term is one consistent solution, not two stacked ones.
+
+        Position and velocity are given distinct measurement variances and
+        sampling rates, so that mixing the two up would show up here.
+        """
+        accel = self.accel(position_meas_variance = 4.0,
+                           velocity_meas_variance = 0.25,
+                           position_sampling_freq = 2.0,
+                           velocity_sampling_freq = 8.0)
+        s = (1.0 / 2.0) * 4.0    # p_delta * position_meas_variance
+        r = (1.0 / 8.0) * 0.25   # v_delta * velocity_meas_variance
+        g = np.dot(self.H3.T, np.dot(np.linalg.inv(np.diag([s, r])), self.H3))
+        q = np.diag([accel.q0, accel.q1, accel.q2])
+        p = accel.c
+
+        residual = np.dot(self.A3, p) + np.dot(p, self.A3.T) + q \
+            - np.dot(p, np.dot(g, p))
+        self.assertLess(np.max(np.abs(residual)), 1e-9 * np.max(np.abs(q)))
+
+    def test_accel_covariance_is_symmetric_positive_definite(self):
+        c = self.accel().c
+        self.assertEqual(c.shape, (3, 3))
+        self.assertTrue(np.allclose(c, c.T))
+        self.assertTrue(np.all(np.linalg.eigvalsh(c) > 0))
+
+    def test_velocity_variance_is_not_zero(self):
+        """The old stacked form left c[1,1] at exactly 0 whenever q1 was 0."""
+        self.assertGreater(self.accel().c[1, 1], 0.0)
+
+    def test_position_accel_cross_covariance_is_populated(self):
+        """c[0,2] used to be hardcoded to 0.0 with a FIXME."""
+        self.assertNotEqual(self.accel().c[0, 2], 0.0)
+        self.assertEqual(self.accel().c[0, 2], self.accel().c[2, 0])
+
+    def test_degenerate_process_noise_raises(self):
+        """An undriven bias state has no unique steady state; say so clearly."""
+        with self.assertRaises(ValueError):
+            self.accel(accel_random_walk = 0.0)
 
 
 if __name__ == '__main__':
