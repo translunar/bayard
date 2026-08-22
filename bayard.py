@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """For understanding covariance growth due to gyroscope and
 accelerometer when only occasional attitude and position/velocity
 measurements are available.
@@ -62,7 +62,10 @@ def plot_att_errors(time, att_cov,
     ax = fig.add_subplot(111)
     ax.grid(True)
     ax.set_xlabel("time (s)")
-    ax.set_ylabel("att err (deg) per-axis 1-sigma")
+    if variance:
+        ax.set_ylabel("att err variance (deg2) per-axis")
+    else:
+        ax.set_ylabel("att err (deg) per-axis 1-sigma")
     if xscale:
         ax.set_xscale(xscale)
     if yscale:
@@ -155,27 +158,31 @@ class Gyroscope(object):
                  bias_stability                = 1.8138e-18, # r2/s3
                  angle_variance                = None,
                  bias_variance                 = None,                 
-                 attitude_meas_variance        = None,  # rad
+                 attitude_meas_sigma           = None,  # rad (1-sigma attitude measurement noise, e.g. star tracker NEA)
                  attitude_meas_sampling_period = 1.0,   # s
                  attitude_meas_bias            = 0.0,   # rad
-                 initial_covariance            = None): # rad
+                 initial_covariance            = None): # rad2
         self.q0 = angle_random_walk
         self.q1 = bias_stability
 
         if initial_covariance is not None:
             self.c = initial_covariance
         else:
-            if attitude_meas_variance is not None:
-                r = attitude_meas_sampling_period * attitude_meas_variance
-                l = np.sqrt(self.q1 + 2.0 * np.sqrt(r * self.q1))
-                self.c = np.zeros((3,3))
-                self.c[0,0] = np.sqrt(r) * l
-                self.c[0,1] = np.sqrt(r * self.q1)
-                self.c[1,1] = np.sqrt(self.q1)
+            if attitude_meas_sigma is not None:
+                # r has units of rad2 s; see bayard_calc.m / bayard_method.m,
+                # where st.r = st.delta * st.nea^2.
+                r = attitude_meas_sampling_period * attitude_meas_sigma**2
+                # self.q0 is q1 and self.q1 is q2 in bayard_calc.m.
+                l = np.sqrt(self.q0 + 2.0 * np.sqrt(r * self.q1))
+                self.c = np.zeros((2,2))
+                self.c[0,0] = np.sqrt(r) * l            # p11
+                self.c[0,1] = np.sqrt(r * self.q1)      # p12
+                self.c[1,1] = np.sqrt(self.q1) * l      # p22
                 self.c[1,0] = self.c[0,1]
             else:
                 print("Warning: Cross-correlation for angle and bias is 0")
-                self.c[0,1] = self[c,10] = 0.0
+                self.c = np.zeros((2,2))
+                self.c[0,1] = self.c[1,0] = 0.0
 
             if angle_variance is not None:
                 self.c[0,0] = angle_variance
@@ -188,7 +195,7 @@ class Gyroscope(object):
             self.b = attitude_meas_bias
 
     def bayard(self, t):
-        return self.q1 * t**3 / 3.0 + self.c[1,1]*t**2 + (2.0 * self.c[0,1] + self.q0)*t + self.c[0,0] + self.b
+        return self.q1 * t**3 / 3.0 + self.c[1,1]*t**2 + (2.0 * self.c[0,1] + self.q0)*t + self.c[0,0] + self.b**2
                  
 
 class Accelerometer(object):
@@ -255,7 +262,7 @@ class Accelerometer(object):
         if position_variance is not None:
             self.c[0,0] = position_variance
 
-        print self.c
+        print(self.c)
 
     def bayard(self, t):
         k1 = 0.05 # 6/5!
@@ -329,20 +336,20 @@ if __name__ == '__main__':
     #import pdb
     #pdb.set_trace()
     gyro = {}
-    gyro['lsm6dsl']   = Gyroscope(angle_random_walk = 0.004,
-                                  bias_stability    = (3.0 * np.pi/180.0),
-                                  attitude_meas_variance = (333e-6)**2,
-                                  attitude_meas_bias     = (333e-6)**2,
+    gyro['lsm6dsl']   = Gyroscope(angle_random_walk = (0.004 * np.pi/180.0)**2, # 4 mdps/sqrt(Hz) = 0.004 (deg/s)/sqrt(Hz) = 0.004 deg/sqrt(s) to r2/s
+                                  bias_stability    = ((3.0 * np.pi/180.0) / 3600.0)**2 / 3600.0, # (deg/hr) to r2/s3
+                                  attitude_meas_sigma    = 333e-6, # rad
+                                  attitude_meas_bias     = 333e-6, # rad
                                   attitude_meas_sampling_period = 0.001)
     gyro['honeywell'] = Gyroscope(angle_random_walk = 5.8761e-12, # r2/s
                                   bias_stability    = 1.8138e-18, # r2/s3,
-                                  attitude_meas_variance = (333e-6)**2, #r2
-                                  attitude_meas_bias     = (333e-6)**2, #r2
+                                  attitude_meas_sigma    = 333e-6, # rad
+                                  attitude_meas_bias     = 333e-6, # rad
                                   attitude_meas_sampling_period = 0.5) # s
     gyro['mg364pdca'] = Gyroscope(angle_random_walk = ((0.09 * np.pi/180.0)**2) / 3600.0,
                                   bias_stability    = ((2.2 * np.pi/180.0) / 3600.0)**2 / 3600.0,
-                                  attitude_meas_variance = (333e-6)**2,
-                                  attitude_meas_bias     = (333e-6)**2,
+                                  attitude_meas_sigma    = 333e-6, # rad
+                                  attitude_meas_bias     = 333e-6, # rad
                                   attitude_meas_sampling_period = 0.5) # s
                                   
                                 
