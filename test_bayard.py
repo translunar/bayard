@@ -162,7 +162,8 @@ class TestAccelerometer(unittest.TestCase):
                                    initial_covariance   = self.C0.copy())
 
     def assertClose(self, actual, expected, msg = None):
-        self.assertTrue(np.isclose(actual, expected, rtol = self.RTOL),
+        """Purely relative; see TestGyroscope.assertClose for why atol is 0.0."""
+        self.assertTrue(np.isclose(actual, expected, rtol = self.RTOL, atol = 0.0),
                         msg or "got %r, expected %r" % (actual, expected))
 
     def test_position_matches_memo_eq_1_6(self):
