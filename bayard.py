@@ -336,7 +336,7 @@ if __name__ == '__main__':
     #import pdb
     #pdb.set_trace()
     gyro = {}
-    gyro['lsm6dsl']   = Gyroscope(angle_random_walk = ((0.004 * np.pi/180.0)**2) / 3600.0, # (deg/sqrt(hr))2 to r2/s
+    gyro['lsm6dsl']   = Gyroscope(angle_random_walk = (0.004 * np.pi/180.0)**2, # 4 mdps/sqrt(Hz) = 0.004 (deg/s)/sqrt(Hz) = 0.004 deg/sqrt(s) to r2/s
                                   bias_stability    = ((3.0 * np.pi/180.0) / 3600.0)**2 / 3600.0, # (deg/hr) to r2/s3
                                   attitude_meas_sigma    = 333e-6, # rad
                                   attitude_meas_bias     = 333e-6, # rad
