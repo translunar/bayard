@@ -152,6 +152,54 @@ def plot_errors(time, pos_cov, vel_cov,
     return fig
                             
 
+def steady_state_covariance(a, g, q):
+    """Solve the continuous-time filter algebraic Riccati equation
+
+        a p + p a' + q - p g p = 0
+
+    for the steady-state covariance p, where g = h' r^-1 h for measurement
+    matrix h and measurement noise covariance r.
+
+    Uses the stable invariant subspace of the Hamiltonian matrix, which needs
+    nothing beyond numpy. For the 2-state (angle, bias) case this reproduces
+    equations (1.2)-(1.5) of references/bayard2000.pdf exactly; see
+    test_bayard.py.
+    """
+    n = a.shape[0]
+
+    z = np.block([[a.T, -g],
+                  [-q,  -a]])
+
+    w, v = np.linalg.eig(z)
+
+    # The stable eigenvalues (negative real part) span the subspace we want.
+    stable = v[:, np.argsort(w.real)[:n]]
+    x, y = stable[:n, :], stable[n:, :]
+
+    try:
+        xinv = np.linalg.inv(x)
+    except np.linalg.LinAlgError:
+        # Happens when the process noise does not excite every state, e.g. an
+        # accel random walk of zero leaves the bias state undriven. The
+        # steady state is then degenerate rather than merely hard to compute.
+        raise ValueError("no unique steady-state covariance: the process "
+                         "noise must excite every state (check that the "
+                         "accel random walk is nonzero), or pass "
+                         "initial_covariance explicitly")
+
+    p = np.real(np.dot(y, xinv))
+    p = (p + p.T) / 2.0 # symmetrize away the rounding
+
+    residual = np.max(np.abs(np.dot(a, p) + np.dot(p, a.T) + q
+                             - np.dot(p, np.dot(g, p))))
+    scale = max(np.max(np.abs(q)), 1e-300)
+    if not np.isfinite(residual) or residual > 1e-6 * scale:
+        raise ValueError("Riccati solution did not converge "
+                         "(residual %g, scale %g)" % (residual, scale))
+
+    return p
+
+
 class Gyroscope(object):
     def __init__(self,
                  angle_random_walk             = 5.8761e-12, # r2/s
@@ -227,31 +275,26 @@ class Accelerometer(object):
             v_delta = 1.0 if velocity_sampling_freq is None else 1.0 / velocity_sampling_freq
             p_delta = 1.0 if position_sampling_freq is None else 1.0 / position_sampling_freq
 
-            self.c  = np.zeros((3,3))
-            
-            # velocity covariance terms
-            # r is in m2/s2 * s = m2/s
-            # sqrt(r * q2) is in m2/s3
-            # l is in m/s^1.5
-            r       = v_delta * velocity_meas_variance # equivalent to star tracker per-axis covariance, but for velocity
-            l       = np.sqrt(self.q1 + 2 * np.sqrt(r * self.q2))
+            # The memo gives a closed-form steady state for the 2-state gyro
+            # (eqs 1.2-1.5) but none for the 3-state accelerometer; eq (1.7)
+            # only defines C(0) abstractly. So solve the Riccati equation the
+            # gyro closed form is itself the solution of, over all 3 states at
+            # once. That fills every term consistently, including the
+            # position/accel cross-covariance.
+            #
+            # r is in m2/s2 * s = m2/s ; s is in m2 * s = m2 s
+            r = v_delta * velocity_meas_variance # per-axis velocity measurement covariance
+            s = p_delta * position_meas_variance # per-axis position measurement covariance
 
-            self.c[2,2] = np.sqrt(self.q2) * l               # m/s2.5 * m/s1.5 = m2/s4
-            self.c[1,2] = self.c[2,1] = np.sqrt(r * self.q2) # sqrt(m2/s * m2/s5) = m2/s3 
-            self.c[1,1] = np.sqrt(r) * l                     # m/sqrt(s) * m/s^1.5 = m2/s2
-            
-            # position covariance terms
-            # s is in m2 * s = m2s
-            # m is in m/sqrt(s)
-            s       = p_delta * position_meas_variance
-            m       = np.sqrt(self.q0 + 2 * np.sqrt(s * self.q1)) # m/sqrt(s)
-            
-            self.c[0,0] = np.sqrt(s) * m # m*sqrt(s) * m/sqrt(s) = m2
-            self.c[0,1] = self.c[1,0] = np.sqrt(s * self.q1) # sqrt(m2s * m2/s3) = m2/s
-            self.c[1,1] = np.sqrt(self.q1) * m # m/s1.5 * m/sqrt(s) = m2/s2
+            a = np.array([[0.0, 1.0, 0.0],   # position, velocity, accel bias
+                          [0.0, 0.0, 1.0],
+                          [0.0, 0.0, 0.0]])
+            h = np.array([[1.0, 0.0, 0.0],   # position and velocity are measured
+                          [0.0, 1.0, 0.0]])
+            g = np.dot(h.T, np.dot(np.linalg.inv(np.diag([s, r])), h))
+            q = np.diag([self.q0, self.q1, self.q2])
 
-            print ("Warning: Cross-correlation for position and acceleration is 0")
-            self.c[0,2] = self.c[2,0] = 0.0 # FIXME: not really sure what this should be
+            self.c = steady_state_covariance(a, g, q)
         else:
             self.c  = initial_covariance
 
