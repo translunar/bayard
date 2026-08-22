@@ -59,9 +59,24 @@ class TestGyroscope(unittest.TestCase):
         self.l  = np.sqrt(self.q1 + 2 * np.sqrt(ST_R * self.q2))
 
     def assertClose(self, actual, expected, msg = None):
-        """Relative comparison; these covariances are far too small for assertAlmostEqual."""
-        self.assertTrue(np.isclose(actual, expected, rtol = self.RTOL),
+        """Purely relative comparison.
+
+        atol must be 0.0. These covariances run down to 1e-15 rad2, so
+        numpy's default atol of 1e-08 would swamp them entirely and the
+        comparison would pass against anything, zero included.
+        """
+        self.assertTrue(np.isclose(actual, expected, rtol = self.RTOL, atol = 0.0),
                         msg or "got %r, expected %r" % (actual, expected))
+
+    def test_assertclose_rejects_zero(self):
+        """Guard against reintroducing an absolute tolerance.
+
+        c[1,1] is around 1e-15, so with numpy's default atol of 1e-08 this
+        comparison against zero would succeed and every other assertion in
+        this file would be vacuous.
+        """
+        with self.assertRaises(AssertionError):
+            self.assertClose(self.gyro.c[1, 1], 0.0)
 
     def test_initial_covariance_matches_matlab(self):
         """c[0,0], c[0,1] and c[1,1] must equal p11, p12 and p22."""
